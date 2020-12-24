@@ -25,14 +25,19 @@ CENTRO = {'chr1': [121500000, 128900000], 'chr2': [90500000, 96800000],
 def main(fname, methods, ofname):
     df = pd.read_csv(fname, sep="\t")
     segments = preprocess(df)
+    seg = segments.copy()
 
-    loh = calc_loh(segments)
+    loh = calc_loh(seg)
     loh['HRD_tag'] = 'LOH'
 
-    tai = calc_tai(segments)
-    loh['HRD_tag'] = 'TAI'
-
-    loh.to_csv(ofname, sep="\t", index=None)
+    seg = segments.copy()
+    tai = calc_tai(seg)
+    
+    hrd = pd.DataFrame()
+    hrd = hrd.append(loh)
+    hrd = hrd.append(tai)
+    hrd.reset_index(drop=True, inplace=True)
+    hrd.to_csv(ofname, sep="\t", index=None)
 
 
 def preprocess(df):
@@ -130,7 +135,7 @@ def calc_lst(segments, size_limit=3000000, segment_cutoff=10000000):
 
 
 
-def calc_tai(segments, size_limit=1000000):
+def calc_tai(segments, size_limit=1000000, ploidy_by_chrom=True):
     """
     Telomeric Allelic Imbalance (TAI) was defined as regions of unequal distribution of
     parental allele sequence with or without changes in the overall copy number that 
@@ -138,8 +143,50 @@ def calc_tai(segments, size_limit=1000000):
     However, the size of limit of TAI is not defined in the original article:
     DOI: 10.1158/2159-8290.CD-11-0206
     Here, I applied the same limit used in scarHRD (Birkbak et al., 2012)
+    
+    :param ploidy_by_chrom -- option to determine ploidy per chromosome
     """
-    return None
+    segments = segments[segments['End_position'] - segments['Start_position'] > size_limit]
+    segments.reset_index(drop=True, inplace=True)
+    
+    hrd_tai = pd.DataFrame()
+    for chrom in ['chr'+str(i) for i in range(1,23)]:
+        chrom_seg = segments[segments['Chromosome'] == chrom]
+
+        # skip chromosome with only one segments
+        if chrom_seg.shape[0] == 1:
+            continue
+        
+        if ploidy_by_chrom:
+            # find A_cn for the longest segments
+            tmp = (chrom_seg['End_position'] - chrom_seg['Start_position']).astype(int)
+            ploidy = chrom_seg.loc[tmp.idxmax(), 'A_cn']
+
+        chrom_seg.loc[:,'ploidy'] = ploidy
+
+        # determine allelic imbalance
+        if (ploidy == 1) or (ploidy % 2 == 0):
+            chrom_seg.loc[chrom_seg['A_cn'] != chrom_seg['B_cn'], 'HRD_tag'] = 'AI'
+        if (ploidy != 1) and (ploidy %2 == 1):
+            chrom_seg.loc[(chrom_seg['A_cn'] + chrom_seg['B_cn'] != ploidy), 'HRD_tag'] = 'AI'
+
+        # check if short arms has TAI
+        chrom_seg.reset_index(drop=True, inplace=True)
+        if ((chrom_seg.loc[0, 'HRD_tag'] == 'AI') and 
+            (chrom_seg.shape[0] != 1 ) and 
+            (chrom_seg.loc[0, 'End_position'] < CENTRO[chrom][0])):
+           chrom_seg.loc[0, 'HRD_tag'] = 'TAI'
+
+        # check if short arms has TAI
+        last_index = chrom_seg.shape[0] - 1
+        if ((chrom_seg.loc[last_index, 'HRD_tag'] == 'AI') and 
+            (chrom_seg.shape[0] != 1 ) and 
+            (chrom_seg.loc[last_index, 'Start_position'] < CENTRO[chrom][1])):
+           chrom_seg.loc[last_index, 'HRD_tag'] = 'TAI'
+        
+        hrd_tai = hrd_tai.append(chrom_seg[chrom_seg['HRD_tag'] == 'TAI'])
+    
+    return hrd_tai
     
 
 
