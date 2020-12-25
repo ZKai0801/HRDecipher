@@ -148,6 +148,7 @@ def calc_tai(segments, size_limit=1000000, ploidy_by_chrom=True):
     """
     segments = segments[segments['End_position'] - segments['Start_position'] > size_limit]
     segments.reset_index(drop=True, inplace=True)
+    segments = combine_segments(segments)
     
     hrd_tai = pd.DataFrame()
     for chrom in ['chr'+str(i) for i in range(1,23)]:
@@ -168,20 +169,21 @@ def calc_tai(segments, size_limit=1000000, ploidy_by_chrom=True):
         if (ploidy == 1) or (ploidy % 2 == 0):
             chrom_seg.loc[chrom_seg['A_cn'] != chrom_seg['B_cn'], 'HRD_tag'] = 'AI'
         if (ploidy != 1) and (ploidy %2 == 1):
-            chrom_seg.loc[(chrom_seg['A_cn'] + chrom_seg['B_cn'] != ploidy), 'HRD_tag'] = 'AI'
+            chrom_seg.loc[chrom_seg['A_cn'] + chrom_seg['B_cn'] != ploidy, 'HRD_tag'] = 'AI'
+            chrom_seg.loc[chrom_seg['B_cn'] == 0, 'HRD_tag'] = 'AI'
 
-        # check if short arms has TAI
+        # check if short arms have TAI
         chrom_seg.reset_index(drop=True, inplace=True)
         if ((chrom_seg.loc[0, 'HRD_tag'] == 'AI') and 
             (chrom_seg.shape[0] != 1 ) and 
             (chrom_seg.loc[0, 'End_position'] < CENTRO[chrom][0])):
            chrom_seg.loc[0, 'HRD_tag'] = 'TAI'
 
-        # check if short arms has TAI
+        # check if long arms have TAI
         last_index = chrom_seg.shape[0] - 1
         if ((chrom_seg.loc[last_index, 'HRD_tag'] == 'AI') and 
             (chrom_seg.shape[0] != 1 ) and 
-            (chrom_seg.loc[last_index, 'Start_position'] < CENTRO[chrom][1])):
+            (chrom_seg.loc[last_index, 'Start_position'] > CENTRO[chrom][1])):
            chrom_seg.loc[last_index, 'HRD_tag'] = 'TAI'
         
         hrd_tai = hrd_tai.append(chrom_seg[chrom_seg['HRD_tag'] == 'TAI'])
