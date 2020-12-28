@@ -32,10 +32,14 @@ def main(fname, methods, ofname):
 
     seg = segments.copy()
     tai = calc_tai(seg)
+
+    seg = segments.copy()
+    lst = calc_lst(seg)
     
     hrd = pd.DataFrame()
-    hrd = hrd.append(loh)
-    hrd = hrd.append(tai)
+    hrd = hrd.append(loh, sort=False)
+    hrd = hrd.append(tai, sort=False)
+    hrd = hrd.append(lst, sort=False)
     hrd.reset_index(drop=True, inplace=True)
     hrd.to_csv(ofname, sep="\t", index=None)
 
@@ -126,13 +130,81 @@ def calc_loh(segments, size_limit=15000000):
     return hrd_loh
 
 
-def calc_lst(segments, size_limit=3000000, segment_cutoff=10000000):
+def determine_lst(segments, size_limit=3000000, segment_cutoff=10000000):
     """
     Large scale transition (LST) was defined as chromosomal break between adjacent regions of at least 10 Mb, 
     with a distance between them not larger than 3Mb.
     """
-    return None
+    lst = pd.DataFrame(columns=['Chromosome', 'Start_position', 'End_position', 'HRD_tag'])
+    i = 0
+    segments.reset_index(drop=True, inplace=True)
+    for index, row in segments.iterrows():
+        if index == 0:
+            old_row = row
+            continue
+        if ((old_row['End_position'] - old_row['Start_position'] >= segment_cutoff) and 
+            (row['End_position'] - row['Start_position'] >= segment_cutoff) and 
+            (row['Start_position'] - old_row['End_position'] <= size_limit)):
+            lst.loc[i, 'Chromosome'] = row['Chromosome']
+            lst.loc[i, 'Start_position'] = old_row['End_position']
+            lst.loc[i, 'End_position'] = row['Start_position']
+            lst.loc[i, 'HRD_tag'] = 'LST'
+            i += 1
+        old_row = row
+    return lst
 
+
+def calc_lst(segments):
+    """
+    Chromosomes need to split into arms;
+    and remove short segments in advance
+    """
+    hrd_lst = pd.DataFrame(columns=['Chromosome', 'Start_position', 'End_position', 'HRD_tag'])
+    
+    for chrom in ['chr'+str(i) for i in range(1,23)]:
+        chrom_seg = segments[segments['Chromosome'] == chrom]
+        
+        # skip chromosome with only one segments
+        if chrom_seg.shape[0] < 2:
+            continue
+
+        # split into chromosome arms
+        p_arm = chrom_seg[chrom_seg['Start_position'] <= CENTRO[chrom][0]]
+        q_arm = chrom_seg[chrom_seg['End_position'] >= CENTRO[chrom][1]]
+        p_arm.reset_index(drop=True, inplace=True)
+        q_arm.reset_index(drop=True, inplace=True)
+
+        # reset segments' coordinates
+        if p_arm.shape[0] > 0:
+            p_arm = combine_segments(p_arm)
+            p_arm.loc[p_arm.shape[0]-1, "End_position"] = CENTRO[chrom][0]
+        
+        if q_arm.shape[0] > 0:
+            q_arm = combine_segments(q_arm)
+            q_arm.loc[0, "Start_position"] = CENTRO[chrom][1]
+
+        # remove short segments <= 3,000,000bp
+        no_3mb = p_arm[p_arm['End_position'] - p_arm['Start_position'] < 3000000].shape[0]
+        while no_3mb > 0:
+            p_arm = p_arm[p_arm['End_position'] - p_arm['Start_position'] >= 3000000]
+            p_arm = combine_segments(p_arm)
+            no_3mb = p_arm[p_arm['End_position'] - p_arm['Start_position'] < 3000000].shape[0]
+
+        no_3mb = q_arm[q_arm['End_position'] - q_arm['Start_position'] < 3000000].shape[0]
+        while no_3mb > 0:
+            q_arm = q_arm[q_arm['End_position'] - q_arm['Start_position'] >= 3000000]
+            q_arm = combine_segments(q_arm)
+            no_3mb = q_arm[q_arm['End_position'] - q_arm['Start_position'] < 3000000].shape[0]
+        
+        # determine LST
+        if p_arm.shape[0] >= 2 :
+            lst = determine_lst(p_arm)
+            hrd_lst = hrd_lst.append(lst, sort=False)
+        if q_arm.shape[0] >= 2:
+            lst = determine_lst(q_arm)
+            hrd_lst = hrd_lst.append(lst, sort=False)
+          
+    return hrd_lst
 
 
 def calc_tai(segments, size_limit=1000000, ploidy_by_chrom=True):
@@ -155,7 +227,7 @@ def calc_tai(segments, size_limit=1000000, ploidy_by_chrom=True):
         chrom_seg = segments[segments['Chromosome'] == chrom]
 
         # skip chromosome with only one segments
-        if chrom_seg.shape[0] == 1:
+        if chrom_seg.shape[0] < 2:
             continue
         
         if ploidy_by_chrom:
