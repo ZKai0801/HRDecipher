@@ -41,7 +41,7 @@ def main(fname, methods, ofname):
     hrd = hrd.append(tai, sort=False)
     hrd = hrd.append(lst, sort=False)
     hrd.reset_index(drop=True, inplace=True)
-    hrd.to_csv(ofname, sep="\t", index=None)
+    hrd.to_csv(ofname, index=None)
 
 
 def preprocess(df):
@@ -81,6 +81,7 @@ def combine_segments(segments):
     the End_position value from the second segment. 
     total_cn is also changed to the sum of those merged segments
     """
+    segments.reset_index(drop=True, inplace=True)
     new_segments = pd.DataFrame(columns=segments.columns)
     for index, row in segments.iterrows():
         if index == 0:
@@ -90,6 +91,10 @@ def combine_segments(segments):
             (old_row["A_cn"] == row["A_cn"]) and 
             (old_row["B_cn"] == row["B_cn"])):
             old_row['End_position'] = row['End_position']
+            # if dataframe reach the last row, 
+            # add the combined segment directly
+            if index == segments.shape[0] - 1:
+                new_segments = new_segments.append(old_row)
         else:
             # if dataframe reach the last row, add the last
             # row if it cannot be combined
@@ -184,26 +189,26 @@ def calc_lst(segments):
             q_arm.loc[0, "Start_position"] = CENTRO[chrom][1]
 
         # remove short segments <= 3,000,000bp
-        no_3mb = p_arm[p_arm['End_position'] - p_arm['Start_position'] < 3000000].shape[0]
-        while no_3mb > 0:
-            p_arm = p_arm[p_arm['End_position'] - p_arm['Start_position'] >= 3000000]
+        index_3mb = p_arm.index[p_arm['End_position'] - p_arm['Start_position'] < 3000000].tolist()
+        while index_3mb:
+            p_arm = p_arm.drop(index=index_3mb[0])
             p_arm = combine_segments(p_arm)
-            no_3mb = p_arm[p_arm['End_position'] - p_arm['Start_position'] < 3000000].shape[0]
+            index_3mb = p_arm.index[p_arm['End_position'] - p_arm['Start_position'] < 3000000].tolist()            
 
-        no_3mb = q_arm[q_arm['End_position'] - q_arm['Start_position'] < 3000000].shape[0]
-        while no_3mb > 0:
-            q_arm = q_arm[q_arm['End_position'] - q_arm['Start_position'] >= 3000000]
+        index_3mb = q_arm.index[q_arm['End_position'] - q_arm['Start_position'] < 3000000].tolist()
+        while index_3mb:
+            q_arm = q_arm.drop(index=index_3mb[0])
             q_arm = combine_segments(q_arm)
-            no_3mb = q_arm[q_arm['End_position'] - q_arm['Start_position'] < 3000000].shape[0]
+            index_3mb = q_arm.index[q_arm['End_position'] - q_arm['Start_position'] < 3000000].tolist()
         
         # determine LST
-        if p_arm.shape[0] >= 2 :
+        if p_arm.shape[0] >= 2:
             lst = determine_lst(p_arm)
             hrd_lst = hrd_lst.append(lst, sort=False)
         if q_arm.shape[0] >= 2:
             lst = determine_lst(q_arm)
             hrd_lst = hrd_lst.append(lst, sort=False)
-          
+
     return hrd_lst
 
 
@@ -281,7 +286,7 @@ if __name__ == "__main__":
     wrkdir = os.path.dirname(os.path.abspath(args.input))
     sampleID = os.path.basename(args.input).split(".")[0]
     if not args.output:
-        ofname = os.path.join(wrkdir, sampleID+".hrd.tsv")
+        ofname = os.path.join(wrkdir, sampleID+".hrd.csv")
     else:
         ofname = args.output    
 
