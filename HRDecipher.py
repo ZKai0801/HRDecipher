@@ -68,7 +68,7 @@ def main(fname, oprefix):
     hrd_df.to_csv(ofname2, sep="\t", index=None)
 
     # plot a HRD segments distribution plot 
-    ofname3 = oprefix + "hrd_chrom.png"
+    plot_scars(ofname1)
 
 
 def preprocess(df):
@@ -295,9 +295,9 @@ def calc_tai(segments, size_limit=1000000, ploidy_by_chrom=True):
     return hrd_tai
 
 
-# def plot_scars():
-#     os.system(""" awk -F"\t" 'NR != 1 {OFS="\t"; print NR, $2, $3, $4, $NF}' """)
-    
+def plot_scars(ofname):
+    rsc = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plot_scars.R")
+    os.system(f"Rscript {rsc} {ofname}")
 
 
 if __name__ == "__main__":
