@@ -22,7 +22,10 @@ CENTRO = {'chr1': [121500000, 128900000], 'chr2': [90500000, 96800000],
           'chrX': [58100000, 63000000], 'chrY': [11600000, 13400000]}
 
 
-def main(fname, methods, ofname):
+def main(fname, oprefix):
+    """
+    Output two tsv files and a png file
+    """
     df = pd.read_csv(fname, sep="\t")
     segments = preprocess(df)
     seg = segments.copy()
@@ -41,7 +44,31 @@ def main(fname, methods, ofname):
     hrd = hrd.append(tai, sort=False)
     hrd = hrd.append(lst, sort=False)
     hrd.reset_index(drop=True, inplace=True)
-    hrd.to_csv(ofname, index=None)
+    hrd = hrd[['Chromosome', 'Start_position', 'End_position', 'HRD_tag']]
+
+    # generate segments output
+    ofname1 = oprefix + ".hrd_segments.tsv"
+    hrd.to_csv(ofname1, sep="\t", index=None)
+
+    # calculate HRD score
+    ofname2 = oprefix + ".hrd.tsv"
+    sampleID = os.path.basename(oprefix)
+    loh = hrd.loc[hrd['HRD_tag'] == "LOH"].shape[0]
+    tai = hrd.loc[hrd['HRD_tag'] == "TAI"].shape[0]
+    lst = hrd.loc[hrd['HRD_tag'] == "LST"].shape[0]
+    hrd_sum = loh + tai + lst
+    purity = segments.loc[1, 'ploidy']
+    hrd_score = loh + tai + lst - 15.5*purity
+    hrd_df = pd.DataFrame({"sampleID": [sampleID],
+                           "LOH": [loh],
+                           "TAI": [tai], 
+                           "LST": [lst], 
+                           "HRD-sum": [hrd_sum], 
+                           "Myraid-HRD-score": [hrd_score]})
+    hrd_df.to_csv(ofname2, sep="\t", index=None)
+
+    # plot a HRD segments distribution plot 
+    ofname3 = oprefix + "hrd_chrom.png"
 
 
 def preprocess(df):
@@ -266,6 +293,10 @@ def calc_tai(segments, size_limit=1000000, ploidy_by_chrom=True):
         hrd_tai = hrd_tai.append(chrom_seg[chrom_seg['HRD_tag'] == 'TAI'])
     
     return hrd_tai
+
+
+# def plot_scars():
+#     os.system(""" awk -F"\t" 'NR != 1 {OFS="\t"; print NR, $2, $3, $4, $NF}' """)
     
 
 
@@ -275,20 +306,15 @@ if __name__ == "__main__":
                          help="""sampleID.pre_hrd.tsv, must contain following columns: 
                                  Chromosome, Start_position, End_position, total_cn, 
                                  A_cn, B_cn, ploidy""")
-    parser.add_argument("-m", "--methods", type=str, default='sum', choices=['sum', 'myriad'], 
-                        help="""Two methods are commonly used in HRD score calculation,
-                        sum is the most widely used one, which simply add three score together;
-                        myriad is the method described in Timms et al., 2014. 
-                        DOI: 10.1186/s13058-014-0475-x""")
-    parser.add_argument("-o", "--output", help="Output filename")
+    parser.add_argument("-o", "--output", help="Output file prefix")
     args = parser.parse_args()
 
     wrkdir = os.path.dirname(os.path.abspath(args.input))
     sampleID = os.path.basename(args.input).split(".")[0]
     if not args.output:
-        ofname = os.path.join(wrkdir, sampleID+".hrd.csv")
+        oprefix = os.path.join(wrkdir, sampleID)
     else:
-        ofname = args.output    
+        oprefix = args.output
 
-    main(args.input, args.methods, ofname)
+    main(args.input, oprefix)
 
