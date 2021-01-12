@@ -58,7 +58,7 @@ def main(fname, oprefix):
     lst = hrd.loc[hrd['HRD_tag'] == "LST"].shape[0]
     hrd_sum = loh + tai + lst
     purity = segments.loc[1, 'ploidy']
-    hrd_score = loh + tai + lst - 15.5*purity
+    hrd_score = round(loh + tai + lst - 15.5*purity, 1)
     hrd_df = pd.DataFrame({"sampleID": [sampleID],
                            "LOH": [loh],
                            "TAI": [tai], 
