@@ -86,9 +86,6 @@ def preprocess(df):
         no_chroms = str(no_chroms)
         raise IOError(f"Input dataframe does not contain {no_chroms}. Please make sure your assay cover all human chromsome")
 
-    # remove NA
-    df = df.dropna()
-
     # remove chromosome X/Y
     df = df[(df['Chromosome'] != 'chrX') & (df['Chromosome'] != 'chrY')]
 
