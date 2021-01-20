@@ -27,6 +27,7 @@ def main(fname, oprefix):
     Output two tsv files and a png file
     """
     df = pd.read_csv(fname, sep="\t")
+    df = df.dropna()
     segments = preprocess(df)
     seg = segments.copy()
 
