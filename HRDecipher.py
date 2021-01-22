@@ -261,9 +261,12 @@ def calc_tai(segments, size_limit=1000000, ploidy_by_chrom=True):
             continue
         
         if ploidy_by_chrom:
-            # find A_cn for the longest segments
-            tmp = (chrom_seg['End_position'] - chrom_seg['Start_position']).astype(int)
-            ploidy = chrom_seg.loc[tmp.idxmax(), 'A_cn']
+            # ploidy is defined as A_cn with longest segments
+            lengths = {}
+            for each_major_copy in set(chrom_seg['A_cn'].tolist()):
+                lengths[each_major_copy] = sum(chrom_seg.loc[chrom_seg['A_cn'] == each_major_copy, 'End_position'] -
+                                               chrom_seg.loc[chrom_seg['A_cn'] == each_major_copy, 'Start_position'])
+            ploidy = max(lengths, key=lengths.get)
 
         chrom_seg.loc[:,'ploidy'] = ploidy
 
