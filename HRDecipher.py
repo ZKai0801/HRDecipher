@@ -22,7 +22,7 @@ CENTRO = {'chr1': [121500000, 128900000], 'chr2': [90500000, 96800000],
           'chrX': [58100000, 63000000], 'chrY': [11600000, 13400000]}
 
 
-def main(fname, oprefix):
+def main(fname, seqz, oprefix):
     """
     Output two tsv files and a png file
     """
@@ -69,7 +69,7 @@ def main(fname, oprefix):
     hrd_df.to_csv(ofname2, sep="\t", index=None)
 
     # plot a HRD segments distribution plot 
-    plot_scars(ofname1)
+    plot_scars(ofname1, seqz)
 
 
 def preprocess(df):
@@ -296,9 +296,9 @@ def calc_tai(segments, size_limit=1000000, ploidy_by_chrom=True):
     return hrd_tai
 
 
-def plot_scars(ofname):
+def plot_scars(ofname, seqz):
     rsc = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plot_scars.R")
-    os.system(f"Rscript {rsc} {ofname}")
+    os.system(f"Rscript {rsc} {ofname} {seqz}")
 
 
 if __name__ == "__main__":
@@ -307,6 +307,7 @@ if __name__ == "__main__":
                          help="""sampleID.pre_hrd.tsv, must contain following columns: 
                                  Chromosome, Start_position, End_position, total_cn, 
                                  A_cn, B_cn, ploidy""")
+    parser.add_argument("seqz", help = "sampleID.bin.seqz.gz file, used to plot BAF and LRR")
     parser.add_argument("-o", "--output", help="Output file prefix")
     args = parser.parse_args()
 
@@ -317,5 +318,5 @@ if __name__ == "__main__":
     else:
         oprefix = args.output
 
-    main(args.input, oprefix)
+    main(args.input, args.seqz, oprefix)
 
